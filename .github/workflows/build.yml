@@ -53,7 +53,9 @@ jobs:
       - name: Install glslang (meson requires glslangValidator for RADV)
         # RADV needs a native glslangValidator (meson.build:717, required because
         # with_bvh == with_amd_vk). MSYS2's mingw-w64-ucrt-x86_64-glslang ships a
-        # pinned, native Windows glslangValidator.exe we put on PATH.
+        # pinned, native Windows glslangValidator.exe we put on PATH. The action
+        # reports its install path via the msys2-location output.
+        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -62,18 +64,12 @@ jobs:
       - name: Put glslang on PATH
         shell: pwsh
         run: |
-          # setup-msys2 fresh-installs MSYS2 under the workspace root, but
-          # restores it to C:\msys64 on a cache hit. Check both locations.
-          $roots = @("$env:GITHUB_WORKSPACE\msys64", "C:\msys64")
-          $glsl = $null
-          foreach ($r in $roots) {
-            if (Test-Path $r) {
-              $glsl = Get-ChildItem $r -Recurse -Filter glslangValidator.exe `
-                          -ErrorAction SilentlyContinue | Select-Object -First 1
-              if ($glsl) { break }
-            }
-          }
-          if (-not $glsl) { throw "glslangValidator.exe not found under: $($roots -join ', ')" }
+          # setup-msys2 installs into a runner-managed dir (e.g. D:\a\_temp\msys64
+          # or C:\msys64); use the action's reported location, not a hardcoded path.
+          $msys = "${{ steps.msys2.outputs.msys2-location }}"
+          $glsl = Get-ChildItem $msys -Recurse -Filter glslangValidator.exe `
+                      -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $glsl) { throw "glslangValidator.exe not found under $msys" }
           Add-Content $env:GITHUB_PATH $glsl.DirectoryName
           & $glsl.FullName --version | Select-Object -First 2
 
