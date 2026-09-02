@@ -62,8 +62,13 @@ jobs:
       - name: Put glslang on PATH
         shell: pwsh
         run: |
-          Add-Content $env:GITHUB_PATH "C:\msys64\ucrt64\bin"
-          & "C:\msys64\ucrt64\bin\glslangValidator.exe" --version | Select-Object -First 2
+          # setup-msys2 extracts MSYS2 into the workspace root, not C:\msys64.
+          $glsl = Get-ChildItem "$env:GITHUB_WORKSPACE\msys64" -Recurse `
+                     -Filter glslangValidator.exe -ErrorAction SilentlyContinue |
+                     Select-Object -First 1
+          if (-not $glsl) { throw "glslangValidator.exe not found under msys64" }
+          Add-Content $env:GITHUB_PATH $glsl.DirectoryName
+          & $glsl.FullName --version | Select-Object -First 2
 
       - name: Checkout upstream mesa-radv-wddm2
         uses: actions/checkout@v4
