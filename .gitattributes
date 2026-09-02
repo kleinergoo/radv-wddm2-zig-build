@@ -1,0 +1,9 @@
+# Normalize line endings: these are always LF in the repo.
+* text=auto
+
+*.ps1   text eol=crlf
+*.py    text eol=lf
+*.h     text eol=lf
+*.yml   text eol=lf
+*.md    text eol=lf
+.ini    text eol=lf

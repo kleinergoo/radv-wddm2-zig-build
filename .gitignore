@@ -1,0 +1,19 @@
+# Build outputs (local builds in the repo root)
+/build-/
+/src/                       # upstream clone (CI checks it out itself)
+*.json                      # ICD JSONs are emitted/uploaded by CI; don't commit local ones
+
+# Meson/ninja internals
+.meson-*/
+meson-private/
+meson-logs/
+meson-info/
+
+# ninja/zig
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.exe
+*.pdb

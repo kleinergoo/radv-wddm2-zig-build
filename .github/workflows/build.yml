@@ -1,0 +1,89 @@
+name: build-radv-wddm2-zig
+
+# Build RADV (Mesa Vulkan) wddm2 for 64-bit and 32-bit Windows using the
+# zig-windows-msvc toolchain, against pristine upstream kleinergoo/mesa-radv-wddm2.
+# Success = both vulkan_radeon.dll link cleanly and each ICD JSON is produced/uploaded.
+# (No GPU run: GitHub-hosted runners have no display / physical device.)
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: radv-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build-${{ matrix.arch }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: "64", zig-target: "x86_64-windows-msvc" }
+          - { arch: "32", zig-target: "x86-windows-msvc" }
+
+    env:
+      VK_ICD_ROOT: ${{ github.workspace }}\radv-wddm2-icd
+      UPSTREAM:   https://github.com/kleinergoo/mesa-radv-wddm2
+
+    steps:
+      - name: Checkout recipes
+        uses: actions/checkout@v4
+
+      - name: Set up Python + meson + ninja
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: false
+      - run: pip install meson ninja
+
+      - name: Install zig 0.16.0
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Enable Windows SDK / MSVC environment
+        # windows-latest has the Windows 10 SDK preinstalled; make its bin/x64
+        # tools + updated includes visible through the PATH/env.
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Checkout upstream mesa-radv-wddm2
+        uses: actions/checkout@v4
+        with:
+          repository: kleinergoo/mesa-radv-wddm2
+          path: src
+
+      - name: Configure + build RADV (${{ matrix.arch }}-bit)
+        shell: pwsh
+        run: |
+          ./zb/build.ps1 `
+            -Arch ${{ matrix.arch }} `
+            -SrcDir "${{ github.workspace }}\src" `
+            -BuildDir "${{ github.workspace }}\build-${{ matrix.arch }}" `
+            -Zig zig `
+            -NoIcd
+      - name: Upload driver DLL (${{ matrix.arch }}-bit)
+        uses: actions/upload-artifact@v4
+        with:
+          name: radv-wddm2-${{ matrix.arch }}-zip
+          path: |
+            ${{ github.workspace }}\build-${{ matrix.arch }}\src\amd\vulkan\vulkan_radeon.dll
+
+      - name: Generate + upload ICD JSON (${{ matrix.arch }}-bit)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:VK_ICD_ROOT | Out-Null
+          ./zb/make_icd.ps1 `
+            -Dll   "${{ github.workspace }}\build-${{ matrix.arch }}\src\amd\vulkan\vulkan_radeon.dll" `
+            -Icd   "$env:VK_ICD_ROOT\radeon_wddm2_${{ matrix.arch }}.json" `
+            -Arch  ${{ matrix.arch }}
+          Get-ChildItem $env:VK_ICD_ROOT
+      - name: Upload ICD JSON (${{ matrix.arch }}-bit)
+        uses: actions/upload-artifact@v4
+        with:
+          name: radv-wddm2-icd-${{ matrix.arch }}
+          path: ${{ env.VK_ICD_ROOT }}\radeon_wddm2_${{ matrix.arch }}.json
