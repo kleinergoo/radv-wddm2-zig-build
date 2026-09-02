@@ -3,13 +3,19 @@
 #
 # Usage:  powershell -ExecutionPolicy Bypass `
 #             -File make_icd.ps1 -Dll <abs path to vulkan_radeon.dll> `
-#             [-Icd <output .json>] [-NoArch] [-ApiVersion 1.4.348] [-FileVer 1.0.1]
+#             [-Icd <output .json>] [-NoArch] [-Relative] `
+#             [-ApiVersion 1.4.348] [-FileVer 1.0.1]
+#
+# -Relative : write library_path as just the DLL filename ("vulkan_radeon.dll")
+#             instead of an absolute path. Use this when the ICD is shipped in
+#             the same directory as the DLL, so the archive is relocatable.
 # ---------------------------------------------------------------------------
 param(
     [Parameter(Mandatory=$true)][string]$Dll,
     [string]$Icd = "",
     [string]$Arch = "",
     [switch]$NoArch,
+    [switch]$Relative,
     [string]$ApiVersion = "1.4.348",
     [string]$FileVer = "1.0.1"
 )
@@ -57,7 +63,7 @@ $json = @{
     "ICD" = @{
         "api_version"   = $ApiVersion
         "library_arch"  = $Arch
-        "library_path"  = $dllPath
+        "library_path"  = if ($Relative) { (Split-Path -Leaf $dllPath) } else { $dllPath }
     }
 } | ConvertTo-Json -Compress
 

@@ -27,7 +27,6 @@ jobs:
           - { arch: "32", zig-target: "x86-windows-msvc" }
 
     env:
-      VK_ICD_ROOT: ${{ github.workspace }}\radv-wddm2-icd
       UPSTREAM:   https://github.com/kleinergoo/mesa-radv-wddm2
 
     steps:
@@ -88,24 +87,43 @@ jobs:
             -BuildDir "${{ github.workspace }}\build-${{ matrix.arch }}" `
             -Zig zig `
             -NoIcd
-      - name: Upload driver DLL (${{ matrix.arch }}-bit)
-        uses: actions/upload-artifact@v4
-        with:
-          name: radv-wddm2-${{ matrix.arch }}-zip
-          path: |
-            ${{ github.workspace }}\build-${{ matrix.arch }}\src\amd\vulkan\vulkan_radeon.dll
-
-      - name: Generate + upload ICD JSON (${{ matrix.arch }}-bit)
+      - name: Stage distributable (${{ matrix.arch }}-bit)
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path $env:VK_ICD_ROOT | Out-Null
+          $dir = if ('${{ matrix.arch }}' -eq '64') { 'x64' } else { 'x32' }
+          $out = "$env:RUNNER_TEMP\dist\$dir"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item `
+            "${{ github.workspace }}\build-${{ matrix.arch }}\src\amd\vulkan\vulkan_radeon.dll" `
+            "$out\vulkan_radeon.dll" -Force
+          # Relocatable ICD: library_path = "vulkan_radeon.dll" (same dir).
           ./zb/make_icd.ps1 `
-            -Dll   "${{ github.workspace }}\build-${{ matrix.arch }}\src\amd\vulkan\vulkan_radeon.dll" `
-            -Icd   "$env:VK_ICD_ROOT\radeon_wddm2_${{ matrix.arch }}.json" `
-            -Arch  ${{ matrix.arch }}
-          Get-ChildItem $env:VK_ICD_ROOT
-      - name: Upload ICD JSON (${{ matrix.arch }}-bit)
+            -Dll      "$out\vulkan_radeon.dll" `
+            -Icd      "$out\radeon_wddm2_${{ matrix.arch }}.json" `
+            -Arch     ${{ matrix.arch }} `
+            -Relative
+          Write-Host "dist/$dir contents:"
+          Get-ChildItem "$out" | Select-Object Name, Length
+      - name: Upload staged ${{ matrix.arch }}-bit dist
         uses: actions/upload-artifact@v4
         with:
-          name: radv-wddm2-icd-${{ matrix.arch }}
-          path: ${{ env.VK_ICD_ROOT }}\radeon_wddm2_${{ matrix.arch }}.json
+          name: dist-${{ matrix.arch }}
+          path: ${{ runner.temp }}\dist\
+          if-no-files-found: error
+
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download staged dists
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded
+          merge-multiple: true
+      - name: Assemble archive + upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: radv-wddm2
+          path: downloaded/
+          if-no-files-found: error
