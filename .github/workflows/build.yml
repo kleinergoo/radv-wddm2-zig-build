@@ -51,19 +51,19 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
 
       - name: Install glslang (meson requires glslangValidator for RADV)
+        # RADV needs a native glslangValidator (meson.build:717, required because
+        # with_bvh == with_amd_vk). MSYS2's mingw-w64-ucrt-x86_64-glslang ships a
+        # pinned, native Windows glslangValidator.exe we put on PATH.
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-glslang
+      - name: Put glslang on PATH
         shell: pwsh
         run: |
-          $zip = "$env:RUNNER_TEMP\glslang.zip"
-          $dst = "$env:RUNNER_TEMP\glslang"
-          # main-tot always carries a fresh, tested Windows build (>= 11.9.0,
-          # which Mesa needs for --depfile support on Windows).
-          Invoke-WebRequest `
-            -Uri "https://github.com/KhronosGroup/glslang/releases/download/main-tot/glslang-main-windows-x86_64-release.zip" `
-            -OutFile $zip
-          Expand-Archive -LiteralPath $zip -DestinationPath $dst -Force
-          $bin = Get-ChildItem $dst -Recurse -Filter glslangValidator.exe | Select-Object -First 1 -ExpandProperty DirectoryName
-          Write-Host "glslangValidator in: $bin"
-          Add-Content $GITHUB_PATH $bin
+          Add-Content $env:GITHUB_PATH "C:\msys64\ucrt64\bin"
+          & "C:\msys64\ucrt64\bin\glslangValidator.exe" --version | Select-Object -First 2
 
       - name: Checkout upstream mesa-radv-wddm2
         uses: actions/checkout@v4
