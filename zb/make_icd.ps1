@@ -6,9 +6,10 @@
 #             [-Icd <output .json>] [-NoArch] [-Relative] `
 #             [-ApiVersion 1.4.348] [-FileVer 1.0.1]
 #
-# -Relative : write library_path as just the DLL filename ("vulkan_radeon.dll")
-#             instead of an absolute path. Use this when the ICD is shipped in
-#             the same directory as the DLL, so the archive is relocatable.
+# -Relative : write library_path as ".\vulkan_radeon.dll" (backslash-escaped by
+#             ConvertTo-Json) instead of an absolute path. Use this when the ICD
+#             is shipped in the same directory as the DLL, so the archive is
+#             relocatable.
 # ---------------------------------------------------------------------------
 param(
     [Parameter(Mandatory=$true)][string]$Dll,
@@ -27,7 +28,8 @@ if (-not (Test-Path -LiteralPath $Dll -PathType Leaf)) {
 }
 $dllPath = (Get-Item -LiteralPath $Dll).FullName
 
-# Infer bitness from the DLL image (ignore the PE header byte offset).
+# Inferred only when needed; kept for -NoArch callers.
+[Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedVariable', '')]
 $Machine = 0
 if ($NoArch) {
     # caller provided explicit $Arch, or we infer from file (best-effort)
@@ -63,7 +65,7 @@ $json = @{
     "ICD" = @{
         "api_version"   = $ApiVersion
         "library_arch"  = $Arch
-        "library_path"  = if ($Relative) { (Split-Path -Leaf $dllPath) } else { $dllPath }
+        "library_path"  = if ($Relative) { ".\" + (Split-Path -Leaf $dllPath) } else { $dllPath }
     }
 } | ConvertTo-Json -Compress
 
